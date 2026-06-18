@@ -1,0 +1,100 @@
+#include "framework.h"
+#include "Player.h"
+#include "Bullet.h"
+#include "Shield.h"
+
+CPlayer::CPlayer()
+	:m_fPosinDis(0.f)
+{
+}
+CPlayer::~CPlayer()
+{
+	Release();
+}
+
+void CPlayer::Initialize()
+{
+	m_tInfo.fX = 400.f;   //플레이어의 시작 x좌표
+	m_tInfo.fY = 300.f;  //플레이어의 시작 y좌표
+
+	m_tInfo.iCX = 100;  //플레이어의 x크기 ---400,300 좌표를 중심으로 (350,250), (350,350),(400,250),(400,350)의 네 꼭지점을 가지는 사각형을 그림
+	m_tInfo.iCY = 100; //플레이어의 y크기
+
+	//m_iLengthY = m_tInfo.iCY + 10; // 포신의 길이 = 110;
+	m_fSpeed = 5.f;   //플레이어의 속도
+
+	m_fPosinDis = 100.f;
+}
+
+int CPlayer::Update()
+{
+	if (m_bDead)
+		return OBJ_DEAD;
+
+	
+	if (GetAsyncKeyState(VK_LEFT) & 0x8000) //지정한 키를 눌렀을 때 움직임 && 키가 눌렸는지 확인
+	{
+		m_fAngle += m_fSpeed;
+	}
+		
+
+	if (GetAsyncKeyState(VK_RIGHT) & 0x8000)
+	{
+		//m_tInfo.fX += m_fSpeed;
+		m_fAngle -= m_fSpeed;
+	}
+	if (GetAsyncKeyState(VK_UP) & 0x8000)   //위의 키를 누를 시 포신의 방향으로 전진
+	{
+		m_tInfo.fX = m_tInfo.fX + m_fSpeed * cosf(m_fAngle * (PI / 180)); //5의 속력으로 포신의 방향으로 움직임  화면은 Y축이 반전되어 있어서 cos에 음수를 붙여 방향을 맞춤
+		m_tInfo.fY = m_tInfo.fY - m_fSpeed * sinf(m_fAngle * (PI / 180));
+
+	}
+	if (GetAsyncKeyState(VK_DOWN) & 0x8000) //아래 키를 누를 시 포신의 끝의 반대 방향으로 전진(포신 방향으로 후진)
+	{
+		//cosf, sinf는 라디안을 받기 때문에 도(degree) 단위인 m_fAngle을 변환
+		m_tInfo.fX = m_tInfo.fX - m_fSpeed * cosf(m_fAngle * (PI / 180));
+		m_tInfo.fY = m_tInfo.fY - m_fSpeed * -sinf(m_fAngle * (PI / 180));
+		
+	}
+
+	if (GetAsyncKeyState(VK_SPACE) & 0x8000)            //스페이스바를 누르면 총알이 생성, 발사
+	{
+		m_pBullet->emplace_back(Create_Bullet());
+	}
+	if(GetAsyncKeyState('A') & 0x8000)
+		m_pShield->emplace_back(Create_Shield());
+
+	Update_Rect();
+
+	return OBJ_NOEVENT;
+
+}
+void CPlayer::Late_Update()
+{
+	m_tPosin.x = (LONG)(m_tInfo.fX + cosf(m_fAngle * PI / 180) * m_fPosinDis);  //*m_fPosin을 곱해줘서 포신의 끝을 가리키게 됨 m_tPosin.x는
+	m_tPosin.y = (LONG)(m_tInfo.fY - sinf(m_fAngle * PI / 180) * m_fPosinDis);
+}
+void CPlayer::Render(HDC _DC)
+{
+	Rectangle(_DC, m_tRect.left, m_tRect.top, m_tRect.right, m_tRect.bottom);
+	MoveToEx(_DC,(int)m_tInfo.fX,(int)m_tInfo.fY, nullptr); //시작점: 플레이어 중심 //MoveToEx는 int형으로 받기 떄문에 (int)로 int형으로 형변환해줌
+	LineTo(_DC, m_tPosin.x, m_tPosin.y);            // 끝점: 포신 끝 좌표
+}
+void CPlayer::Release()
+{
+
+}
+
+
+CObj* CPlayer::Create_Bullet()   //다형성 덕분에 같은 부모CObj의 다른 자식 Bullet의 함수 사용 가능
+{
+	CObj* pObj = CAbFactory<CBullet>::Create((float)m_tPosin.x, (float)m_tPosin.y,m_fAngle); //포신의 끝에서 총알이 나가게끔 
+
+	return pObj;
+
+}
+
+CObj* CPlayer::Create_Shield()
+{
+	return CAbFactory<CShield>::Create(this);
+}

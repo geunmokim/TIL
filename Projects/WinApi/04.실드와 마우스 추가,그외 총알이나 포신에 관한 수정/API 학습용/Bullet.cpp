@@ -2,6 +2,7 @@
 #include "Bullet.h"
 
 CBullet::CBullet()
+	:m_eDir(BULLET::END)
 {
 
 }
@@ -25,24 +26,8 @@ int CBullet::Update()
 	if (m_bDead)
 		return OBJ_DEAD;
 
-	//switch (m_eDir)
-	//{
-	//case BULLET::LEFT:    //왼쪽을 눌렀을 경우
-	//	m_tInfo.fX -= m_fSpeed;
-	//	break;
-	//case BULLET::RIGHT:   //오른쪽을 눌렀을 경우
-	//	m_tInfo.fX += m_fSpeed;
-	//	break;
-	//case BULLET::UP:
-	//	m_tInfo.fY -= m_fSpeed;
-	//	break;
-	//case BULLET::DOWN:
-	//	m_tInfo.fY += m_fSpeed;
-	//	break;
-
-	//}
-	m_tInfo.fX -= cosf(PI / 180 * m_fAngle) * m_fSpeed;  //포신 끝에서 나가는 것처럼 보이게 하기 위해 포신과 방향을 맞췄음
-	m_tInfo.fY += sinf(m_fAngle * PI / 180) * m_fSpeed;
+	m_tInfo.fX += cosf(PI / 180.f * m_fAngle) * m_fSpeed;  //포신 끝에서 나가는 것처럼 보이게 하기 위해 포신과 방향을 맞췄음
+	m_tInfo.fY -= sinf(m_fAngle * PI / 180.f) * m_fSpeed;
 
 	Update_Rect();
 
