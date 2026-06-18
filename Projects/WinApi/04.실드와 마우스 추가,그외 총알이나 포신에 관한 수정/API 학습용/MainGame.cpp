@@ -55,6 +55,7 @@ void CMainGame::Update()
 	}
 	CCollisionMgr::Collision_Rect(m_listObj[OBJID::MONSTER], m_listObj[OBJID::BULLET]);  //몬스터와 총알의 충돌 판정
 	CCollisionMgr::Collision_Rect(m_listObj[OBJID::PLAYER], m_listObj[OBJID::MONSTER]);  //플레이어와 몬스터의 충돌 판정
+	CCollisionMgr::Collision_Rect(m_listObj[OBJID::SHIELD], m_listObj[OBJID::MONSTER]);  //실드와 몬스터의 충돌 판정
 }
 void CMainGame::Late_Update()
 {
