@@ -1,0 +1,18 @@
+#pragma once
+#include "Obj.h"
+class CNewMonster :public CObj
+{
+	//Monster_Melee와 Monster_Range의 공통부분을 작성하는 Monster들의 부모
+public:
+	CNewMonster();
+	~CNewMonster();
+
+public:
+	virtual void Initialize() override = 0;  //melee와 range에서 다른 스프라이트를 사용하기 때문에 이부분은 공통부분이 아니라서
+	virtual int Update() override;
+	virtual void Late_Update() override;
+	virtual void Render(HDC _DC)override;
+	virtual void Release() override;
+	virtual void On_Turn() override = 0;
+};
+

@@ -1,0 +1,48 @@
+#include "framework.h"
+#include "NewMonster.h"
+#include "BmpMgr.h"
+
+CNewMonster::CNewMonster()
+{
+
+}
+
+CNewMonster::~CNewMonster()
+{
+	Release();
+}
+
+int CNewMonster::Update()
+{
+	if (m_bDead)
+		return OBJ_DEAD;
+
+	Update_Rect();
+
+	return OBJ_NOEVENT;
+
+}
+
+void CNewMonster::Late_Update()
+{
+
+}
+void CNewMonster::Render(HDC _DC)
+{
+	Update_Rect();
+
+	HDC hMonsterDC = CBmpMgr::Get_Instance()->Find_Image(m_pImageKey);
+
+	GdiTransparentBlt(_DC,
+		m_tRect.left, m_tRect.top,
+		m_tInfo.iCX, m_tInfo.iCY,
+		hMonsterDC,
+		0, 0,
+		m_tInfo.iCX, m_tInfo.iCY,
+		RGB(255, 255, 255));
+
+}
+void CNewMonster::Release()
+{
+
+}
