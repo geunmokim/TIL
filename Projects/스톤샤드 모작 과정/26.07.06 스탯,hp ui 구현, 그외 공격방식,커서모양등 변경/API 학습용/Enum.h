@@ -1,0 +1,22 @@
+#pragma once
+namespace BULLET                             //namespace 붙인 이유 -> BULLET과 MONSTER가 DIR,LEFT,RIGHT로 같은 이름을 사용중이기에 namespace로 분류한것
+{
+	enum DIR { LEFT, RIGHT , UP, DOWN,MY_DIR, END};
+}
+
+namespace OBJID
+{
+	enum ID{ PLAYER, BULLET,ARROW, MONSTER, MOUSE,SHIELD,UI,EFFECT, END};
+}
+
+namespace RENDERID
+{
+	enum ID { BACKGROUND, OBJECT, EFFECT, UI, END};
+}
+
+    enum VISIBILITY { UNSEEN, VISIBLE, EXPLORED,VISIBILITY_END };
+
+	enum ITEM_TYPE { ITEM_WEAPON, ITEM_ARMOR, ITEM_HAT,ITEM_TYPE_END};
+
+	enum WEAPON{WEAPON_CLEAVER,WEAPON_END};
+	enum ARMOR{ARMOR_GAMBESON,ARMOR_HAT,ARMOR_END};
