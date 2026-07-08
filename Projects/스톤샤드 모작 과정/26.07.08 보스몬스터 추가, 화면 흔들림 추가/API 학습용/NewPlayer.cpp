@@ -1,0 +1,330 @@
+#include "framework.h"
+#include "NewPlayer.h"
+#include "KeyMgr.h"
+#include "BmpMgr.h"
+#include "TileMgr.h"
+#include "TurnMgr.h"
+#include "ObjMgr.h"
+#include "ScrollMgr.h"
+#include "Sight.h"
+#include "Monster_Melee.h"
+#include "Monster_Range.h"
+#include "Inven.h"
+CNewPlayer::CNewPlayer()
+	:m_bKeyLock(false), m_iAtk(0), m_iDef(0), m_iExp(0),m_iLevel(1),m_iMaxExp(100),m_iMaxHp(100)
+{
+
+}
+
+CNewPlayer::~CNewPlayer()
+{
+	Release();
+}
+
+void CNewPlayer::Initialize()
+{
+	CBmpMgr::Get_Instance()->Insert_Bmp(_T("../Image/Player/s_player_0.bmp"), _T("PlayerWalk"));
+
+	m_tInfo.iCX = TILECX;
+	m_tInfo.iCY = TILECY;
+	
+	Set_GridPos(5, 5); // 시작 칸 위치. Set_GridPos가 m_tInfo.fX/fY까지 같이 맞춰준다
+	m_iHp = 100;
+
+	m_iAtk = 15;
+	m_iDef = 0;
+	m_pImageKey = _T("PlayerWalk");
+	m_eRenderID = RENDERID::OBJECT;
+	m_bDead = false;
+	m_bKeyLock = false;
+	m_bFlipX = false;
+
+}
+int CNewPlayer::Update()
+{
+	if (m_bDead)
+		return OBJ_DEAD;
+
+	Key_Check();
+
+	Update_Rect();
+
+	return OBJ_NOEVENT;
+}
+
+void CNewPlayer::Late_Update()
+{
+}
+void CNewPlayer::Render(HDC _DC)
+{
+	Update_Rect();
+
+	HDC hPlayerDC = CBmpMgr::Get_Instance()->Find_Image(m_pImageKey);
+	int iScrollX = (int)CScrollMgr::Get_Instance()->Get_ShakeScrollX();
+	int iScrollY = (int)CScrollMgr::Get_Instance()->Get_ShakeScrollY();
+
+	int iDestX = m_tRect.left + iScrollX;
+	int iDestY = m_tRect.top + iScrollY;
+	//화면 어디에 그릴지를 계산하기 위해 스크롤값을 더해준다
+	if (m_bFlipX)
+	{
+		HDC hTempDC = CreateCompatibleDC(_DC);
+		HBITMAP hTempBmp = CreateCompatibleBitmap(_DC, 48, 40);
+		HBITMAP hOldBmp = (HBITMAP)SelectObject(hTempDC, hTempBmp);
+
+		RECT rc = { 0, 0, 48, 40 };
+		FillRect(hTempDC, &rc, (HBRUSH)GetStockObject(WHITE_BRUSH));
+
+		StretchBlt(hTempDC, 47, 0, -48, 40,
+			hPlayerDC, 0, 0, 48, 40, SRCCOPY);
+
+		GdiTransparentBlt(_DC,
+			iDestX, iDestY, 48, 40,
+			hTempDC, 0, 0, 48, 40,
+			RGB(255, 255, 255));
+
+		SelectObject(hTempDC, hOldBmp);
+		DeleteObject(hTempBmp);
+		DeleteDC(hTempDC);
+	}
+	else
+	{
+		GdiTransparentBlt(_DC,
+			iDestX, iDestY, 48, 40,
+			hPlayerDC, 0, 0, 48, 40,
+			RGB(255, 255, 255));
+	}
+	//장착된 장비 스프라이트 덮어 씌우기
+	auto Draw_Equip = [&](const TCHAR* _pKey)
+		{
+			HDC hEquipDC = CBmpMgr::Get_Instance()->Find_Image(_pKey);
+			if (!hEquipDC) return;
+
+			if (m_bFlipX)
+			{
+				HDC hTempDC = CreateCompatibleDC(_DC);
+				HBITMAP hTempBmp = CreateCompatibleBitmap(_DC, 48, 40);
+				HBITMAP hOldBmp = (HBITMAP)SelectObject(hTempDC, hTempBmp);
+				RECT rc = { 0, 0, 48, 40 };
+				FillRect(hTempDC, &rc, (HBRUSH)GetStockObject(WHITE_BRUSH));
+				StretchBlt(hTempDC, 47, 0, -48, 40, hEquipDC, 0, 0, 48, 40, SRCCOPY);
+				GdiTransparentBlt(_DC, iDestX, iDestY, 48, 40,
+					hTempDC, 0, 0, 48, 40, RGB(255, 255, 255));
+				SelectObject(hTempDC, hOldBmp);
+				DeleteObject(hTempBmp);
+				DeleteDC(hTempDC);
+			}
+			else
+			{
+				GdiTransparentBlt(_DC, iDestX, iDestY, 48, 40,
+					hEquipDC, 0, 0, 48, 40, RGB(255, 255, 255));
+			}
+		};
+
+	if (CInven::Get_Instance()->Get_WeaponItem())
+		Draw_Equip(L"Char_Cleaver");
+	if (CInven::Get_Instance()->Get_ArmorItem())
+		Draw_Equip(L"Char_Gambeson");
+	if (CInven::Get_Instance()->Get_HatItem())
+		Draw_Equip(L"Char_Hat");
+
+}
+void CNewPlayer::Release()
+{
+
+}
+
+bool CNewPlayer::Can_Move(int _row, int _col)
+{
+	//던전 범위를 벗어나면 이동 불가
+
+	if (_row < 0 || _row >= GRID_ROW_MAX) 
+		return false;
+	if (_col < 0 || _col >= GRID_COL_MAX)
+		return false;
+
+	//범위 안이라도 그 칸이 벽이라면 이동 불가(DrawaID 기준으로 판단)
+	if (CTileMgr::Get_Instance()->Is_Wall(_row, _col))
+		return false;
+
+	// 그 칸에 살아있는 몬스터가 있다면, 겹쳐서 이동할 수 없다.
+	if (CObjMgr::Get_Instance()->Is_Occupied(GRIDPOS(_row, _col)))
+		return false;
+
+	return true;
+}
+
+void CNewPlayer::Key_Check()
+{
+	//플레이어 사망상태면 더이상 입력을 받지 않는다
+	if (CTurnMgr::Get_Instance()->Is_GameOver())
+		return;
+	//플레이어가 한턴에 하나의 행동만 하게끔
+	if (CTurnMgr::Get_Instance()->Is_PlayerTurnEnd())
+		return;
+
+
+	//플레이어 턴이 아니라면 키를 입력해도 무효화
+	if (PLAYER_TURN != CTurnMgr::Get_Instance()->Get_TurnState())
+		return;
+
+
+
+	int row = m_tGridPos.row;
+	int col = m_tGridPos.col;
+
+
+
+	//대각선 이동을 위해 각 키의 상태를 따로 얻어 둔다(Key_Down은 순간만 잡아내서 대신 Key_Pressing 사용)
+	bool bLeft = CKeyMgr::Get_Instance()->Key_Pressing(VK_LEFT);
+	bool bRight = CKeyMgr::Get_Instance()->Key_Pressing(VK_RIGHT);
+	bool bUp = CKeyMgr::Get_Instance()->Key_Pressing(VK_UP);
+	bool bDown = CKeyMgr::Get_Instance()->Key_Pressing(VK_DOWN);
+
+	int iScrollX = (int)CScrollMgr::Get_Instance()->Get_ScrollX();
+	int iScrollY = (int)CScrollMgr::Get_Instance()->Get_ScrollY();
+	POINT pt;
+	GetCursorPos(&pt);
+	ScreenToClient(g_hWnd, &pt);
+	int iCol = (pt.x - iScrollX + TILECX / 2) / TILECX;
+	int iRow = (pt.y - iScrollY + TILECY / 2) / TILECY;
+	g_bCursorOnMonster = (CObjMgr::Get_Instance()->Get_MonsterAt(iRow, iCol) != nullptr);
+
+
+	if (!CInven::Get_Instance()->Is_Open() &&
+		CKeyMgr::Get_Instance()->Key_Down(VK_LBUTTON))  //인벤도 vk_lbutton을 사용해서 인벤토리가 닫혀있을떄만 작동되게
+	{
+
+		// 화면 픽셀 → 월드 픽셀 → 격자 칸 번호
+		int iScrollX = (int)CScrollMgr::Get_Instance()->Get_ScrollX();
+		int iScrollY = (int)CScrollMgr::Get_Instance()->Get_ScrollY();
+
+		POINT pt;
+		GetCursorPos(&pt);
+		ScreenToClient(g_hWnd, &pt);
+
+
+
+
+		// 스크롤 역산해서 월드 좌표로 변환
+		int iWorldX = pt.x - iScrollX + TILECX / 2;
+		int iWorldY = pt.y - iScrollY + TILECY / 2;
+
+		
+
+		// 월드 좌표 → 격자 칸 번호
+		int iCol = iWorldX / TILECX;
+		int iRow = iWorldY / TILECY;
+
+		g_iClickRow = iRow;
+		g_iClickCol = iCol;
+
+		CObj* pMonster = CObjMgr::Get_Instance()->Get_MonsterAt(iRow, iCol);
+		g_bCursorOnMonster = (pMonster != nullptr);
+
+		if (pMonster)
+		{
+			GRIDPOS monsterPos = pMonster->Get_GridPos();
+			int iDistance = m_tGridPos.Get_Distance(monsterPos);
+
+			if (iDistance <= PLAYER_ATTACK_RANGE)
+			{
+				pMonster->Take_Damage(m_iAtk);
+				CTurnMgr::Get_Instance()->End_PlayerTurn();
+			}
+		}
+	}
+
+
+	//상하좌우 모든 방향키가 떨어졌다면 잠금을 해제
+	if (!bLeft && !bRight && !bUp && !bDown)
+		m_bKeyLock = false;
+
+	if (m_bKeyLock)
+		return;
+
+	if (bLeft && bUp)
+	{
+		col -= 1; row -= 1;
+		m_bFlipX = false;
+	}
+	else if (bLeft && bDown)
+	{
+		col -= 1; row += 1;
+		m_bFlipX = false;
+	}
+	else if (bRight && bUp)
+	{
+		col += 1; row -= 1;
+		m_bFlipX = true;
+	}
+	else if (bRight && bDown)
+	{
+		col += 1; row += 1;
+		m_bFlipX = true;
+	}
+	else if (bLeft)
+	{
+		col -= 1;
+		m_bFlipX = false;
+	}
+	else if (bRight)
+	{
+		col += 1;
+		m_bFlipX = true;
+	}
+	else if (bUp)
+	{
+		row -= 1;
+	}
+	else if (bDown)
+	{
+		row += 1;
+	}
+	else
+		return;
+
+
+
+	if (Can_Move(row, col))
+	{
+		Set_GridPos(row, col);
+
+		m_bKeyLock = true;
+
+		CSight::Get_Instance()->Update_Sight();
+
+		float fTargetScrollX = -(m_tInfo.fX - WINCX / 2);  // (m_tInfo.fX - WINCX / 2) -> 플레이어를 화면 중앙에 두려면 월드를 얼마나 옮겨야 하는지 
+		float fTargetScrollY = -(m_tInfo.fY - WINCY / 2);
+		CScrollMgr::Get_Instance()->Set_ScrollX_To(fTargetScrollX);
+		CScrollMgr::Get_Instance()->Set_ScrollY_To(fTargetScrollY);
+
+		CScrollMgr::Get_Instance()->Scroll_Lock();
+	
+		//이동할시 턴 종료 -> 적턴으로
+		CTurnMgr::Get_Instance()->End_PlayerTurn();
+	}
+
+
+
+}
+
+void CNewPlayer::Add_Exp(int _iExp)
+{
+	m_iExp += _iExp;
+	if (m_iExp >= m_iMaxExp)
+		Level_Up();
+}
+
+void CNewPlayer::Level_Up()
+{
+	++m_iLevel;
+	m_iExp -= m_iMaxExp;
+	m_iHp += 10;
+	m_iAtk += 20;
+	m_iDef += 5;
+	m_iMaxExp += 50;
+
+
+
+}
