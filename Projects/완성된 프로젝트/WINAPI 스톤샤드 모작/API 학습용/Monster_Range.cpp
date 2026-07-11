@@ -1,0 +1,119 @@
+#include "framework.h"
+#include "Monster_Range.h"
+#include "ObjMgr.h"
+#include "BmpMgr.h"
+#include "PathFind.h"
+#include "Arrow.h"
+#include "ScrollMgr.h"
+#include "SoundMgr.h"
+
+
+
+CMonster_Range::CMonster_Range()
+	:m_iAtk(0), m_bAlerted(false)
+{
+
+}
+CMonster_Range::~CMonster_Range()
+{
+
+}
+
+void CMonster_Range::Initialize()
+{
+	CBmpMgr::Get_Instance()->Insert_Bmp(_T("../Image/Monster/Range/s_bandit_outlaw01_0.bmp"), _T("Bandit_Outlaw"));
+
+	m_tInfo.iCX = TILECX;
+	m_tInfo.iCY = TILECY;
+	m_iHp = 50;
+	m_iAtk = 15;
+	m_iSrcCX = 26;
+	m_iSrcCY = 33;
+	m_iExp = 100;
+
+	Set_GridPos(12, 12); // 시작 칸 위치 //일단 임의로 잡아둔 값
+
+	m_pImageKey = _T("Bandit_Outlaw");
+	m_eRenderID = RENDERID::OBJECT;
+	m_bDead = false;
+	m_iAmmo = 999;
+	m_iAttackRange = 2; //내가 정해준 현재 원거리 몬스터의 사거리
+}
+
+
+void CMonster_Range::On_Turn()
+{
+	CObj* pPlayer = CObjMgr::Get_Instance()->Get_Player(); //플레이어의 정보를 가져와서 pPlayer에 저장
+
+
+	GRIDPOS playerPos = pPlayer->Get_GridPos(); //player에 설정되있는 좌표를 가져와서 playerPos에 저장 -> find_nextStep에 사용하기 위해
+	GRIDPOS monsterPos = Get_GridPos();
+
+	int iDistance = monsterPos.Get_Distance(playerPos);
+
+	//몬스터의 시야거리보다 거리가 멀때
+	if (iDistance > MONSTER_SIGHT_RANGE)
+	{
+		m_bAlerted = false;
+		return;
+	}
+
+	if (!m_bAlerted)
+	{
+		m_bAlerted = true;
+		Play_AlertSound();
+	}
+
+
+	if (iDistance <= m_iAttackRange)  //플레이어와의 거리가 3이면 공격
+	{
+		Attack(pPlayer);
+		m_iAmmo--;
+	}
+	else
+	{
+		GRIDPOS next = CPathFind::Find_NextStep(monsterPos, playerPos); //플레이어의 좌표를 받아와서 플레이어와의 경로 계산
+		Chase(next);
+	}
+
+
+
+
+}
+
+void CMonster_Range::Attack(CObj* _pTarget)
+{
+	GRIDPOS targetPos = _pTarget->Get_GridPos();
+	GRIDPOS myPos = Get_GridPos();
+
+
+
+	CArrow* pArrow = (CArrow*)CAbFactory<CArrow>::Create();
+	int iDistance = myPos.Get_Distance(targetPos);
+	pArrow->Set_LifeFrame(iDistance * 8);  // 거리가 멀수록 오래 날아감
+	pArrow->Set_GridPos(myPos.row, myPos.col);
+	pArrow->Set_TargetPos(targetPos);
+	pArrow->Set_Direction(myPos, targetPos);
+	CObjMgr::Get_Instance()->Add_Object(OBJID::ARROW, pArrow);
+
+	_pTarget->Take_Damage(Get_Atk());
+
+	Play_AttackSound();
+}
+
+void CMonster_Range::Take_Damage(int _dmg)
+{
+	CNewMonster::Take_Damage(_dmg);
+
+	//원거리 몬스터가 맞을 때 공통 셰이크
+	CScrollMgr::Get_Instance()->Start_Shake(2.f, 100);
+}
+
+void CMonster_Range::Play_AlertSound()
+{
+	CSoundMgr::Get_Instance()->PlaySound(_T("snd_human_alert_1.wav"), CSoundMgr::MONSTER);
+}
+void CMonster_Range::Play_AttackSound()
+{
+	CSoundMgr::Get_Instance()->PlaySound(_T("snd_arrow_hit_2.wav"), CSoundMgr::MONSTER);
+}
